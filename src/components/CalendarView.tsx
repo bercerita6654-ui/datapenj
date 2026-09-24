@@ -22,6 +22,7 @@ import {
 } from '../services/sheets';
 import { detectTransactionCategory, detectColumnValueType } from '../utils/transactionColors';
 import { MonthOption, extractMonthYear } from '../utils/monthHelper';
+import { getIndonesianHoliday } from '../utils/holidays';
 
 interface CalendarViewProps {
   rows: SheetRow[];
@@ -40,6 +41,8 @@ interface DayData {
   isCurrentMonth: boolean;
   isToday: boolean;
   isPast: boolean;
+  isSunday: boolean;
+  holidayName?: string | null;
   matchingRow?: SheetRow;
   totalNominal: number;
   totalTransaksi: number;
@@ -56,7 +59,7 @@ const INDO_MONTH_NAMES = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ];
 
-const WEEKDAY_NAMES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+const WEEKDAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
   rows,
@@ -132,8 +135,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     
     // First day of month: 0 (Sun) to 6 (Sat)
     const firstDayWeekday = new Date(year, monthIndex, 1).getDay();
-    // Convert to Monday = 0 ... Sunday = 6
-    const startingPadding = (firstDayWeekday + 6) % 7;
+    // Sunday-first standard calendar: Sunday = 0, Monday = 1, ... Saturday = 6
+    const startingPadding = firstDayWeekday;
 
     const days: DayData[] = [];
 
@@ -144,6 +147,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       const prevMonth = monthIndex === 0 ? 11 : monthIndex - 1;
       const prevYear = monthIndex === 0 ? year - 1 : year;
       const iso = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const holiday = getIndonesianHoliday(iso);
+      const isSun = new Date(prevYear, prevMonth, d).getDay() === 0;
       days.push({
         dayNumber: d,
         isoDate: iso,
@@ -151,6 +156,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         isCurrentMonth: false,
         isToday: iso === todayISO,
         isPast: new Date(iso) < new Date(todayISO),
+        isSunday: isSun,
+        holidayName: holiday,
         totalNominal: 0,
         totalTransaksi: 0,
         instanNominal: 0,
@@ -166,6 +173,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     for (let d = 1; d <= daysInMonth; d++) {
       const iso = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const matchedRow = findRowForDay(year, monthIndex, d);
+      const holiday = getIndonesianHoliday(iso);
+      const isSun = new Date(year, monthIndex, d).getDay() === 0;
 
       let instanNominal = 0;
       let regulerNominal = 0;
@@ -212,6 +221,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         isCurrentMonth: true,
         isToday: iso === todayISO,
         isPast: new Date(iso) < new Date(todayISO),
+        isSunday: isSun,
+        holidayName: holiday,
         matchingRow: matchedRow,
         totalNominal,
         totalTransaksi,
@@ -230,6 +241,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       const nextMonth = monthIndex === 11 ? 0 : monthIndex + 1;
       const nextYear = monthIndex === 11 ? year + 1 : year;
       const iso = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const holiday = getIndonesianHoliday(iso);
+      const isSun = new Date(nextYear, nextMonth, d).getDay() === 0;
       days.push({
         dayNumber: d,
         isoDate: iso,
@@ -237,6 +250,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         isCurrentMonth: false,
         isToday: iso === todayISO,
         isPast: new Date(iso) < new Date(todayISO),
+        isSunday: isSun,
+        holidayName: holiday,
         totalNominal: 0,
         totalTransaksi: 0,
         instanNominal: 0,
@@ -410,15 +425,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       {/* Calendar Grid Container */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-        {/* Weekday Header (Senin - Minggu) */}
+        {/* Weekday Header (Minggu - Sabtu) */}
         <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/80 text-center text-xs font-bold text-slate-700 py-3">
           {WEEKDAY_NAMES.map((name, idx) => {
-            const isWeekend = idx >= 5;
+            const isSunday = idx === 0;
+            const isSaturday = idx === 6;
             return (
               <div
                 key={name}
                 className={`flex flex-col items-center justify-center ${
-                  isWeekend ? 'text-rose-600' : 'text-slate-700'
+                  isSunday ? 'text-rose-600 font-extrabold' : isSaturday ? 'text-indigo-600 font-bold' : 'text-slate-700 font-bold'
                 }`}
               >
                 <span className="hidden sm:inline">{name}</span>
@@ -431,6 +447,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         {/* Calendar Matrix Cells */}
         <div className="grid grid-cols-7 divide-x divide-y divide-slate-200 bg-slate-100">
           {calendarDays.map((day, index) => {
+            const isSunday = index % 7 === 0;
+            const isHoliday = !!day.holidayName;
+            const isRedDay = isSunday || isHoliday;
             const hasData = !!day.matchingRow;
             const isToday = day.isToday;
 
@@ -440,6 +459,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 onClick={() => onOpenDateEntry(day.isoDate)}
                 role="button"
                 tabIndex={0}
+                title={
+                  day.holidayName
+                    ? `🚩 Hari Libur Nasional: ${day.holidayName}${hasData ? ` • Nominal: ${formatIndonesianCurrency(day.totalNominal)}` : ''}`
+                    : undefined
+                }
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
@@ -447,10 +471,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   }
                 }}
                 className={`min-h-[110px] sm:min-h-[135px] p-2 sm:p-2.5 transition-all flex flex-col justify-between cursor-pointer group relative ${
-                  !day.isCurrentMonth
-                    ? 'bg-slate-50/40 text-slate-400 hover:bg-slate-100'
-                    : isToday
-                    ? 'bg-emerald-50/40 hover:bg-emerald-50 border-2 border-emerald-400 z-10'
+                  isToday
+                    ? 'bg-sky-50/90 hover:bg-sky-100/90 border-2 border-sky-500 ring-2 ring-sky-300/70 shadow-md z-10'
+                    : !day.isCurrentMonth
+                    ? isRedDay
+                      ? 'bg-rose-50/20 text-rose-300 hover:bg-rose-50/40'
+                      : 'bg-slate-50/40 text-slate-400 hover:bg-slate-100'
+                    : isHoliday
+                    ? hasData
+                      ? 'bg-rose-50/40 hover:bg-rose-50/70 border border-rose-200/80'
+                      : 'bg-rose-50/30 hover:bg-rose-100/50'
+                    : isSunday
+                    ? hasData
+                      ? 'bg-rose-50/30 hover:bg-rose-50/50'
+                      : 'bg-white hover:bg-rose-50/40'
                     : hasData
                     ? 'bg-white hover:bg-emerald-50/30'
                     : 'bg-white hover:bg-slate-50'
@@ -458,30 +492,55 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               >
                 {/* Cell Header: Day Number & Status Badges */}
                 <div className="flex items-start justify-between gap-1">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`text-sm sm:text-base font-extrabold flex items-center justify-center w-7 h-7 rounded-lg ${
-                        isToday
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : hasData
-                          ? 'bg-emerald-100 text-emerald-900 font-black'
-                          : day.isCurrentMonth
-                          ? 'text-slate-800 group-hover:text-emerald-700'
-                          : 'text-slate-400'
-                      }`}
-                    >
-                      {day.dayNumber}
-                    </span>
-
-                    {isToday && (
-                      <span className="hidden sm:inline-block text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-600 text-white uppercase tracking-wider">
-                        Hari Ini
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-sm sm:text-base flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
+                          isToday
+                            ? 'bg-sky-600 text-white font-black shadow-xs'
+                            : isRedDay
+                            ? hasData
+                              ? 'bg-rose-100 text-rose-700 font-black border border-rose-200'
+                              : day.isCurrentMonth
+                              ? 'text-rose-600 font-black group-hover:text-rose-700'
+                              : 'text-rose-300 font-bold'
+                            : hasData
+                            ? 'bg-emerald-100 text-emerald-900 font-black'
+                            : day.isCurrentMonth
+                            ? 'text-slate-800 font-extrabold group-hover:text-emerald-700'
+                            : 'text-slate-400 font-medium'
+                        }`}
+                      >
+                        {day.dayNumber}
                       </span>
+
+                      {isToday && (
+                        <span className="hidden sm:inline-block text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-sky-600 text-white uppercase tracking-wider shadow-xs">
+                          Hari Ini
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Holiday Pill / Badge */}
+                    {day.holidayName && day.isCurrentMonth && (
+                      <div
+                        title={`Hari Libur Nasional: ${day.holidayName}`}
+                        className="mt-0.5 max-w-[130px] sm:max-w-[160px] inline-flex items-center gap-1 text-[9px] font-extrabold text-rose-800 bg-rose-100/90 px-1.5 py-0.5 rounded border border-rose-300 shadow-xs truncate"
+                      >
+                        <span className="text-[10px] shrink-0">🚩</span>
+                        <span className="truncate">{day.holidayName}</span>
+                      </div>
                     )}
                   </div>
 
                   {hasData && (
-                    <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                      isToday
+                        ? 'text-sky-800 bg-sky-100 border-sky-200'
+                        : isRedDay
+                        ? 'text-rose-700 bg-rose-50 border-rose-200'
+                        : 'text-slate-500 bg-slate-100 border-slate-200'
+                    }`}>
                       #{day.matchingRow?.rowIndex}
                     </span>
                   )}
@@ -492,63 +551,69 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   {hasData ? (
                     <div className="space-y-1">
                       {/* TOTAL NOMINAL for this day */}
-                      <div className="bg-emerald-50/90 border border-emerald-200 rounded-lg p-1 sm:p-1.5">
-                        <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-800">
+                      <div className={`rounded-lg p-1 sm:p-1.5 border ${
+                        isToday
+                          ? 'bg-sky-100/90 border-sky-300 text-sky-950'
+                          : isRedDay
+                          ? 'bg-rose-50/90 border-rose-200 text-rose-950'
+                          : 'bg-emerald-50/90 border-emerald-200 text-emerald-900'
+                      }`}>
+                        <div className={`text-[9px] font-bold uppercase tracking-wider ${
+                          isToday ? 'text-sky-800' : isRedDay ? 'text-rose-700' : 'text-emerald-800'
+                        }`}>
                           Total Nominal
                         </div>
-                        <div className="text-xs sm:text-sm font-extrabold font-mono text-emerald-900 truncate">
+                        <div className={`text-xs sm:text-sm font-extrabold font-mono truncate ${
+                          isToday ? 'text-sky-950' : isRedDay ? 'text-rose-950' : 'text-emerald-900'
+                        }`}>
                           {formatIndonesianCurrency(day.totalNominal)}
                         </div>
                       </div>
 
                       {/* TOTAL TRANSAKSI badge */}
-                      <div className="flex items-center justify-between text-[10px] text-slate-600 px-1 font-medium">
-                        <span className="flex items-center gap-1 font-bold text-slate-700">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      <div className="flex items-center justify-between text-[10px] text-slate-600 px-1 font-medium pt-0.5">
+                        <span className={`flex items-center gap-1 font-bold ${
+                          isToday ? 'text-sky-900' : isRedDay ? 'text-rose-800' : 'text-slate-700'
+                        }`}>
+                          <CheckCircle2 className={`w-3 h-3 ${
+                            isToday ? 'text-sky-600' : isRedDay ? 'text-rose-600' : 'text-emerald-600'
+                          }`} />
                           <span>{day.totalTransaksi} Transaksi</span>
                         </span>
                       </div>
-
-                      {/* Mini Category Badges */}
-                      <div className="hidden sm:flex flex-wrap items-center gap-1 pt-0.5">
-                        {day.instanNominal > 0 && (
-                          <span
-                            title={`⚡ Instan: ${formatIndonesianCurrency(day.instanNominal)}`}
-                            className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold"
-                          >
-                            ⚡ {formatNumberLocale(day.instanNominal)}
-                          </span>
-                        )}
-                        {day.regulerNominal > 0 && (
-                          <span
-                            title={`📦 Reguler: ${formatIndonesianCurrency(day.regulerNominal)}`}
-                            className="text-[9px] px-1 py-0.2 rounded bg-sky-100 text-sky-900 border border-sky-300 font-bold"
-                          >
-                            📦 {formatNumberLocale(day.regulerNominal)}
-                          </span>
-                        )}
-                        {day.manualNominal > 0 && (
-                          <span
-                            title={`✍️ Manual: ${formatIndonesianCurrency(day.manualNominal)}`}
-                            className="text-[9px] px-1 py-0.2 rounded bg-purple-100 text-purple-900 border border-purple-300 font-bold"
-                          >
-                            ✍️ {formatNumberLocale(day.manualNominal)}
-                          </span>
-                        )}
-                      </div>
                     </div>
                   ) : (
-                    <div className="text-center py-2 sm:py-3 text-slate-300 group-hover:text-emerald-600 transition-colors">
+                    <div className={`text-center py-2 sm:py-3 transition-colors ${
+                      isToday
+                        ? 'text-sky-400 group-hover:text-sky-700'
+                        : isRedDay
+                        ? 'text-rose-300 group-hover:text-rose-600'
+                        : 'text-slate-300 group-hover:text-emerald-600'
+                    }`}>
                       <Plus className="w-4 h-4 mx-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <span className="text-[10px] font-medium hidden sm:inline-block">
-                        {day.isCurrentMonth ? 'Klik isi data' : ''}
+                      <span className="text-[10px] font-semibold hidden sm:inline-block">
+                        {isToday
+                          ? 'Klik isi hari ini'
+                          : day.isCurrentMonth
+                          ? isHoliday
+                            ? `Libur: ${day.holidayName}`
+                            : isSunday
+                            ? 'Klik isi Minggu'
+                            : 'Klik isi data'
+                          : ''}
                       </span>
                     </div>
                   )}
                 </div>
 
                 {/* Cell Footer: Hover action prompt */}
-                <div className="text-[10px] text-emerald-700 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 bg-white/90 rounded py-0.5 shadow-xs border border-emerald-200">
+                <div className={`text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 bg-white/95 rounded py-0.5 shadow-xs border ${
+                  isToday
+                    ? 'text-sky-700 border-sky-300'
+                    : isRedDay
+                    ? 'text-rose-700 border-rose-300'
+                    : 'text-emerald-700 border-emerald-200'
+                }`}>
                   <Edit2 className="w-2.5 h-2.5" />
                   <span>{hasData ? 'Edit Data' : '+ Input'}</span>
                 </div>
@@ -560,27 +625,27 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       {/* Legend & Guide */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="font-bold text-slate-800 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            Petunjuk Kategori:
+            Petunjuk Kalender:
           </span>
-          <span className="flex items-center gap-1 text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-            <Zap className="w-3 h-3 text-amber-600" />
-            ⚡ Instan (Kuning)
+          <span className="flex items-center gap-1 text-sky-800 font-semibold bg-sky-50 px-2 py-0.5 rounded border border-sky-300">
+            <span className="w-2 h-2 rounded-full bg-sky-500"></span>
+            Kotak Biru: Tanggal Hari Ini
           </span>
-          <span className="flex items-center gap-1 text-sky-800 font-semibold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
-            <Package className="w-3 h-3 text-sky-600" />
-            📦 Reguler (Biru)
+          <span className="flex items-center gap-1 text-rose-800 font-semibold bg-rose-50 px-2 py-0.5 rounded border border-rose-300">
+            <span>🚩</span>
+            Teks Merah: Hari Libur Nasional &amp; Hari Minggu
           </span>
-          <span className="flex items-center gap-1 text-purple-800 font-semibold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-            <PenTool className="w-3 h-3 text-purple-600" />
-            ✍️ Manual (Ungu)
+          <span className="flex items-center gap-1 text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Kotak Hijau: Tanggal Ada Data Penjualan
           </span>
         </div>
 
-        <div className="text-slate-500">
-          💡 Klik pada tanggal manapun di kalender untuk membuka pop up formulir isian.
+        <div className="text-slate-500 font-medium">
+          💡 Sorot/arahkan kursor ke tanggal libur untuk melihat nama Hari Libur Nasional. Klik untuk mengisi data.
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { SheetHeaderConfig, SheetRow } from '../types/sheets';
 import { formatNumberInput, parseNumericValue, formatIndonesianCurrency } from '../services/sheets';
 import { detectTransactionCategory, detectColumnValueType, TRANSACTION_THEMES } from '../utils/transactionColors';
 import { parseIndonesianDateToISO, getTodayISO, formatDateID } from '../utils/monthHelper';
+import { getIndonesianHoliday } from '../utils/holidays';
 
 interface DailyEntryModalProps {
   isOpen: boolean;
@@ -67,6 +68,13 @@ export const DailyEntryModal: React.FC<DailyEntryModalProps> = ({
       return formatDateID(selectedIsoDate);
     }
     return customDateText;
+  }, [dateType, selectedIsoDate, customDateText]);
+
+  // Check if active selected date is an Indonesian National Holiday
+  const activeHoliday = useMemo(() => {
+    const iso = dateType === 'standard' ? selectedIsoDate : parseIndonesianDateToISO(customDateText);
+    if (!iso) return null;
+    return getIndonesianHoliday(iso);
   }, [dateType, selectedIsoDate, customDateText]);
 
   // Find if active date already has an existing row
@@ -323,6 +331,21 @@ export const DailyEntryModal: React.FC<DailyEntryModalProps> = ({
                   placeholder="Contoh: Senin, 24 September 2026 atau 24/09/2026"
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
                 />
+              </div>
+            )}
+
+            {/* Indonesian National Holiday Banner */}
+            {activeHoliday && (
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs shadow-xs">
+                <span className="text-base shrink-0">🚩</span>
+                <div>
+                  <div className="font-extrabold uppercase tracking-wider text-[10px] text-rose-700">
+                    Hari Libur Nasional Indonesia
+                  </div>
+                  <div className="font-bold text-rose-950 text-xs mt-0.5">
+                    {activeHoliday}
+                  </div>
+                </div>
               </div>
             )}
 
