@@ -399,7 +399,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-slate-900 mt-0.5">
             {monthStats.totalTransaksiMonth}{' '}
-            <span className="text-xs font-normal text-slate-500">entri</span>
+            <span className="text-xs font-bold text-slate-800">nota</span>
           </div>
         </div>
 
@@ -532,18 +532,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       </div>
                     )}
                   </div>
-
-                  {hasData && (
-                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
-                      isToday
-                        ? 'text-sky-800 bg-sky-100 border-sky-200'
-                        : isRedDay
-                        ? 'text-rose-700 bg-rose-50 border-rose-200'
-                        : 'text-slate-500 bg-slate-100 border-slate-200'
-                    }`}>
-                      #{day.matchingRow?.rowIndex}
-                    </span>
-                  )}
                 </div>
 
                 {/* Cell Body: Data or Empty Placeholder */}
@@ -570,15 +558,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         </div>
                       </div>
 
-                      {/* TOTAL TRANSAKSI badge */}
-                      <div className="flex items-center justify-between text-[10px] text-slate-600 px-1 font-medium pt-0.5">
-                        <span className={`flex items-center gap-1 font-bold ${
-                          isToday ? 'text-sky-900' : isRedDay ? 'text-rose-800' : 'text-slate-700'
+                      {/* TOTAL NOTA / TRANSAKSI badge */}
+                      <div className="flex items-center justify-between px-1 pt-1">
+                        <span className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold ${
+                          isToday ? 'text-sky-950' : isRedDay ? 'text-rose-900' : 'text-slate-800'
                         }`}>
-                          <CheckCircle2 className={`w-3 h-3 ${
+                          <CheckCircle2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${
                             isToday ? 'text-sky-600' : isRedDay ? 'text-rose-600' : 'text-emerald-600'
                           }`} />
-                          <span>{day.totalTransaksi} Transaksi</span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="text-xs sm:text-sm font-black font-mono">{day.totalTransaksi}</span>
+                            <strong className="text-xs sm:text-sm font-extrabold">Nota</strong>
+                          </span>
                         </span>
                       </div>
                     </div>
