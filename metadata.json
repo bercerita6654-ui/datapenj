@@ -1,0 +1,6 @@
+{
+  "name": "Editor Penjualan Harian Sheets",
+  "description": "Aplikasi manajemen dan edit data Google Sheets Penjualan Harian terintegrasi dengan Google Workspace",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
