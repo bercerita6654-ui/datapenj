@@ -25,6 +25,7 @@ import {
 import { SheetHeaderConfig, SheetMetadata, SheetRow, ToastMessage } from './types/sheets';
 import { Navbar } from './components/Navbar';
 import { StatsCards } from './components/StatsCards';
+import { CalendarView } from './components/CalendarView';
 import { DataTable } from './components/DataTable';
 import { DailyEntryModal } from './components/DailyEntryModal';
 import { EditRowModal } from './components/EditRowModal';
@@ -32,7 +33,7 @@ import { ConfirmationModal } from './components/ConfirmationModal';
 import { AnalyticsView } from './components/AnalyticsView';
 import { AuthScreen } from './components/AuthScreen';
 import { ToastContainer } from './components/Toast';
-import { FileSpreadsheet, PlusCircle, Calendar } from 'lucide-react';
+import { FileSpreadsheet, PlusCircle, Calendar as CalendarIcon, Table as TableIcon, BarChart2 } from 'lucide-react';
 import {
   getAvailableMonthsFromRows,
   getCurrentActiveMonth,
@@ -61,13 +62,14 @@ export default function App() {
   });
   const [rows, setRows] = useState<SheetRow[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
-  const [activeView, setActiveView] = useState<'table' | 'analytics'>('table');
+  const [activeView, setActiveView] = useState<'calendar' | 'table' | 'analytics'>('calendar');
 
   // Active Month Filter state
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>('auto');
 
   // Modals state
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
+  const [selectedDateForEntry, setSelectedDateForEntry] = useState<string | undefined>(undefined);
   const [editingRow, setEditingRow] = useState<SheetRow | null>(null);
 
   // Confirmation modal state
@@ -140,75 +142,65 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Compute available months from rows
-  const availableMonths = useMemo(() => {
-    return getAvailableMonthsFromRows(rows);
-  }, [rows]);
-
-  // Set default active month whenever rows are loaded
-  useEffect(() => {
-    if (availableMonths.length > 0) {
-      if (selectedMonthKey === 'auto') {
-        const currentSys = getCurrentActiveMonth();
-        const found = availableMonths.find((m) => m.key === currentSys.key);
-        if (found) {
-          setSelectedMonthKey(found.key);
-        } else {
-          // Default to latest available month in sheet
-          setSelectedMonthKey(availableMonths[0].key);
-        }
-      }
-    } else if (selectedMonthKey === 'auto') {
-      setSelectedMonthKey('all');
-    }
-  }, [availableMonths, selectedMonthKey]);
-
-  // 3. Fetch Spreadsheet Data
+  // 2. Load spreadsheet data
   const loadSpreadsheet = useCallback(
-    async (token: string, targetSheet: string = sheetName) => {
+    async (token: string, targetSheetName: string) => {
       setIsLoadingData(true);
       try {
-        const meta = await getSpreadsheetMetadata(spreadsheetId, token);
-        setSheetMetadata(meta);
+        const metadata = await getSpreadsheetMetadata(spreadsheetId, token);
+        setSheetMetadata(metadata);
 
-        let activeSheet = targetSheet;
-        const exists = meta.sheets.some((s) => s.title.toLowerCase() === targetSheet.toLowerCase());
-        if (!exists && meta.sheets.length > 0) {
-          activeSheet = meta.sheets[0].title;
-          setSheetName(activeSheet);
+        let finalSheetName = targetSheetName;
+        const exists = metadata.sheets.some((s) => s.title === targetSheetName);
+        if (!exists && metadata.sheets.length > 0) {
+          finalSheetName = metadata.sheets[0].title;
+          setSheetName(finalSheetName);
         }
 
-        const data = await fetchSheetData(spreadsheetId, activeSheet, token);
+        const data = await fetchSheetData(spreadsheetId, finalSheetName, token);
         setHeaders(data.headers);
         setRows(data.rows);
       } catch (err: unknown) {
         console.error('Error fetching sheet data:', err);
-        if (err instanceof SheetsApiError) {
-          if (err.status === 401) {
-            addToast('error', 'Sesi Berakhir', 'Silakan masuk kembali dengan Google untuk melanjutkan.');
-            setAccessToken(null);
-            setTokenState(null);
-          } else if (err.status === 403) {
-            addToast('error', 'Akses Ditolak', 'Akun Anda belum memiliki izin untuk mengakses spreadsheet ini.');
-          } else {
-            addToast('error', 'Gagal Memuat Sheet', err.message);
-          }
+        const apiError = err as SheetsApiError;
+        if (apiError.status === 401 || apiError.status === 403) {
+          addToast('error', 'Sesi Berakhir', 'Sesi login Google telah kedaluwarsa. Silakan login kembali.');
+          await logout();
         } else {
-          addToast('error', 'Terjadi Kesalahan', 'Gagal terhubung ke Google Sheets API.');
+          addToast('error', 'Gagal Memuat Data', apiError.message || 'Tidak dapat membaca data dari Google Sheets.');
         }
       } finally {
         setIsLoadingData(false);
       }
     },
-    [spreadsheetId, sheetName, addToast]
+    [spreadsheetId, addToast]
   );
 
+  // Trigger load when authenticated
   useEffect(() => {
     if (accessToken) {
       loadSpreadsheet(accessToken, sheetName);
     }
   }, [accessToken, sheetName, loadSpreadsheet]);
 
+  // Months available in the dataset
+  const availableMonths = useMemo(() => {
+    return getAvailableMonthsFromRows(rows);
+  }, [rows]);
+
+  // Auto set to newest month if 'auto'
+  useEffect(() => {
+    if (selectedMonthKey === 'auto') {
+      if (availableMonths.length > 0) {
+        setSelectedMonthKey(availableMonths[0].key);
+      } else {
+        const current = getCurrentActiveMonth();
+        setSelectedMonthKey(current.key);
+      }
+    }
+  }, [availableMonths, selectedMonthKey]);
+
+  // Auth actions
   const handleSignIn = async () => {
     setIsLoggingIn(true);
     setLoginError(null);
@@ -217,34 +209,51 @@ export default function App() {
       if (result) {
         setUser(result.user);
         setTokenState(result.accessToken);
-        addToast('success', 'Berhasil Masuk', `Selamat datang, ${result.user.displayName || result.user.email}!`);
+        setAccessToken(result.accessToken);
+        addToast('success', 'Berhasil Masuk', `Selamat datang, ${result.user.displayName || 'Pengguna'}!`);
       }
     } catch (err: unknown) {
       console.error('Login error:', err);
-      const message = err instanceof Error ? err.message : 'Gagal menghubungkan akun Google.';
-      setLoginError(message);
-      addToast('error', 'Gagal Masuk', message);
+      const msg = err instanceof Error ? err.message : 'Gagal melakukan login dengan Google.';
+      setLoginError(msg);
+      addToast('error', 'Login Gagal', msg);
     } finally {
       setIsLoggingIn(false);
     }
   };
 
   const handleLogout = async () => {
-    await logout();
-    setUser(null);
-    setTokenState(null);
-    setRows([]);
-    setSheetMetadata(null);
-    addToast('info', 'Telah Keluar', 'Anda telah berhasil keluar dari akun.');
-  };
-
-  const handleSelectSheet = (newSheetName: string) => {
-    setSheetName(newSheetName);
-    if (accessToken) {
-      loadSpreadsheet(accessToken, newSheetName);
+    try {
+      await logout();
+      setUser(null);
+      setTokenState(null);
+      setRows([]);
+      setSheetMetadata(null);
+      addToast('info', 'Keluar Akun', 'Anda telah berhasil keluar.');
+    } catch (err) {
+      console.error('Logout error:', err);
     }
   };
 
+  const handleSelectSheet = (name: string) => {
+    setSheetName(name);
+    if (accessToken) {
+      loadSpreadsheet(accessToken, name);
+    }
+  };
+
+  // Open entry modal with specific date clicked from calendar
+  const handleOpenDateEntry = (isoDate: string) => {
+    setSelectedDateForEntry(isoDate);
+    setIsEntryModalOpen(true);
+  };
+
+  const handleOpenGeneralEntry = () => {
+    setSelectedDateForEntry(undefined);
+    setIsEntryModalOpen(true);
+  };
+
+  // Submission handler
   const handleRequestNewEntry = (entry: {
     dateRef: string;
     values: {
@@ -260,49 +269,42 @@ export default function App() {
     setIsEntryModalOpen(false);
 
     if (entry.existingRowIndex) {
-      const existingRow = rows.find((r) => r.rowIndex === entry.existingRowIndex);
+      const existing = rows.find((r) => r.rowIndex === entry.existingRowIndex);
       setConfirmModal({
         isOpen: true,
-        title: `Konfirmasi Update Baris #${entry.existingRowIndex}`,
-        description: `Anda akan memperbarui data untuk tanggal ${entry.dateRef} pada Google Sheet '${sheetName}'.`,
-        actionLabel: 'Konfirmasi & Update',
-        isDestructive: false,
+        title: `Update Data Tanggal ${entry.dateRef}?`,
+        description: `Tanggal ini sudah tercatat pada Baris #${entry.existingRowIndex}. Apakah Anda ingin menimpa data pada baris tersebut?`,
+        actionLabel: 'Update Baris',
         details: {
           dateRef: entry.dateRef,
           rowIndex: entry.existingRowIndex,
           headers,
           values: entry.values,
-          originalValues: existingRow ? {
-            col2: existingRow.col2,
-            col3: existingRow.col3,
-            col4: existingRow.col4,
-            col5: existingRow.col5,
-            col6: existingRow.col6,
-            col7: existingRow.col7,
-          } : undefined,
+          originalValues: existing
+            ? {
+                col2: existing.col2,
+                col3: existing.col3,
+                col4: existing.col4,
+                col5: existing.col5,
+                col6: existing.col6,
+                col7: existing.col7,
+              }
+            : undefined,
         },
         onConfirm: async () => {
           const token = await getAccessToken();
           if (!token) throw new Error('Token tidak tersedia.');
-          await updateEditableColumns(
-            spreadsheetId,
-            sheetName,
-            entry.existingRowIndex!,
-            entry.values,
-            token,
-            entry.dateRef
-          );
-          addToast('success', 'Berhasil Diperbarui', `Data baris #${entry.existingRowIndex} (${entry.dateRef}) tersimpan.`);
+          await updateEditableColumns(spreadsheetId, sheetName, entry.existingRowIndex!, entry.values, token);
+          addToast('success', 'Berhasil Diperbarui', `Data baris #${entry.existingRowIndex} berhasil diupdate.`);
           await loadSpreadsheet(token, sheetName);
         },
       });
     } else {
       setConfirmModal({
         isOpen: true,
-        title: 'Konfirmasi Tambah Data Penjualan',
-        description: `Anda akan menambahkan baris baru untuk tanggal ${entry.dateRef} ke dalam Google Sheet '${sheetName}'.`,
-        actionLabel: 'Konfirmasi & Simpan',
-        isDestructive: false,
+        title: `Simpan Data Baru untuk ${entry.dateRef}?`,
+        description: `Data akan ditambahkan sebagai baris baru pada sheet '${sheetName}'.`,
+        actionLabel: 'Simpan ke Sheet',
         details: {
           dateRef: entry.dateRef,
           headers,
@@ -312,7 +314,7 @@ export default function App() {
           const token = await getAccessToken();
           if (!token) throw new Error('Token tidak tersedia.');
           await appendDailyRecord(spreadsheetId, sheetName, entry.dateRef, entry.values, token);
-          addToast('success', 'Berhasil Disimpan', `Data penjualan ${entry.dateRef} berhasil ditambahkan ke sheet.`);
+          addToast('success', 'Data Ditambahkan', `Data baru untuk ${entry.dateRef} berhasil disimpan.`);
           await loadSpreadsheet(token, sheetName);
         },
       });
@@ -331,34 +333,35 @@ export default function App() {
     },
     updatedDate?: string
   ) => {
-    const existingRow = rows.find((r) => r.rowIndex === rowIndex);
+    const existing = rows.find((r) => r.rowIndex === rowIndex);
     setEditingRow(null);
 
     setConfirmModal({
       isOpen: true,
-      title: `Konfirmasi Perubahan Baris #${rowIndex}`,
-      description: `Perubahan pada Kolom 2-7 (dan acuan tanggal) akan langsung ditulis ke Google Sheet '${sheetName}'.`,
-      actionLabel: 'Simpan ke Google Sheet',
-      isDestructive: false,
+      title: `Simpan Perubahan Baris #${rowIndex}?`,
+      description: `Perubahan akan langsung disimpan ke Google Sheet.`,
+      actionLabel: 'Simpan Perubahan',
       details: {
-        dateRef: updatedDate || existingRow?.dateRef || '-',
+        dateRef: updatedDate || existing?.dateRef || `Baris #${rowIndex}`,
         rowIndex,
         headers,
         values,
-        originalValues: existingRow ? {
-          col2: existingRow.col2,
-          col3: existingRow.col3,
-          col4: existingRow.col4,
-          col5: existingRow.col5,
-          col6: existingRow.col6,
-          col7: existingRow.col7,
-        } : undefined,
+        originalValues: existing
+          ? {
+              col2: existing.col2,
+              col3: existing.col3,
+              col4: existing.col4,
+              col5: existing.col5,
+              col6: existing.col6,
+              col7: existing.col7,
+            }
+          : undefined,
       },
       onConfirm: async () => {
         const token = await getAccessToken();
         if (!token) throw new Error('Token tidak tersedia.');
         await updateEditableColumns(spreadsheetId, sheetName, rowIndex, values, token, updatedDate);
-        addToast('success', 'Perubahan Tersimpan', `Baris #${rowIndex} berhasil diperbarui di Google Sheet.`);
+        addToast('success', 'Tersimpan', `Perubahan baris #${rowIndex} berhasil diperbarui.`);
         await loadSpreadsheet(token, sheetName);
       },
     });
@@ -375,25 +378,27 @@ export default function App() {
       col7: string;
     }
   ) => {
-    const existingRow = rows.find((r) => r.rowIndex === rowIndex);
+    const existing = rows.find((r) => r.rowIndex === rowIndex);
     setConfirmModal({
       isOpen: true,
-      title: `Konfirmasi Simpan Baris #${rowIndex}`,
-      description: `Simpan hasil edit langsung pada baris #${rowIndex} ke spreadsheet Google.`,
-      actionLabel: 'Simpan Perubahan',
+      title: `Simpan Edit Cepat Baris #${rowIndex}?`,
+      description: `Apakah Anda ingin menerapkan perubahan angka pada baris #${rowIndex} (${existing?.dateRef || 'Tanggal'})?`,
+      actionLabel: 'Terapkan Simpan',
       details: {
-        dateRef: existingRow?.dateRef || '-',
+        dateRef: existing?.dateRef || `Baris #${rowIndex}`,
         rowIndex,
         headers,
         values,
-        originalValues: existingRow ? {
-          col2: existingRow.col2,
-          col3: existingRow.col3,
-          col4: existingRow.col4,
-          col5: existingRow.col5,
-          col6: existingRow.col6,
-          col7: existingRow.col7,
-        } : undefined,
+        originalValues: existing
+          ? {
+              col2: existing.col2,
+              col3: existing.col3,
+              col4: existing.col4,
+              col5: existing.col5,
+              col6: existing.col6,
+              col7: existing.col7,
+            }
+          : undefined,
       },
       onConfirm: async () => {
         const token = await getAccessToken();
@@ -452,7 +457,7 @@ export default function App() {
         onViewChange={setActiveView}
         onRefresh={() => loadSpreadsheet(accessToken, sheetName)}
         onSelectSheet={handleSelectSheet}
-        onOpenNewEntry={() => setIsEntryModalOpen(true)}
+        onOpenNewEntry={handleOpenGeneralEntry}
         onLogout={handleLogout}
       />
 
@@ -481,7 +486,7 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsEntryModalOpen(true)}
+              onClick={handleOpenGeneralEntry}
               className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm transition active:scale-95"
             >
               <PlusCircle className="w-4 h-4" />
@@ -497,11 +502,70 @@ export default function App() {
           selectedMonthKey={effectiveMonthKey}
           availableMonths={availableMonths}
           onSelectMonth={setSelectedMonthKey}
-          onOpenNewEntry={() => setIsEntryModalOpen(true)}
+          onOpenNewEntry={handleOpenGeneralEntry}
         />
 
-        {/* Main View: Table vs Analytics */}
-        {activeView === 'table' ? (
+        {/* View Switcher Bar */}
+        <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl p-2 shadow-xs">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setActiveView('calendar')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+                activeView === 'calendar'
+                  ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <CalendarIcon className="w-4 h-4 text-emerald-600" />
+              <span>Tampilan Kalender</span>
+            </button>
+
+            <button
+              onClick={() => setActiveView('table')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+                activeView === 'table'
+                  ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <TableIcon className="w-4 h-4 text-emerald-600" />
+              <span>Tabel Spreadsheet</span>
+            </button>
+
+            <button
+              onClick={() => setActiveView('analytics')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+                activeView === 'analytics'
+                  ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <BarChart2 className="w-4 h-4 text-emerald-600" />
+              <span>Grafik Tren</span>
+            </button>
+          </div>
+
+          <div className="hidden sm:block text-xs text-slate-500 pr-3">
+            {activeView === 'calendar' && 'Klik tanggal pada kalender untuk input atau edit.'}
+            {activeView === 'table' && 'Tabel data penjualan dengan pencarian dan edit baris.'}
+            {activeView === 'analytics' && 'Visualisasi distribusi penjualan per kolom.'}
+          </div>
+        </div>
+
+        {/* Main View: Calendar vs Table vs Analytics */}
+        {activeView === 'calendar' && (
+          <CalendarView
+            rows={rows}
+            headers={headers}
+            selectedMonthKey={effectiveMonthKey}
+            availableMonths={availableMonths}
+            onSelectMonth={setSelectedMonthKey}
+            onOpenDateEntry={handleOpenDateEntry}
+            onOpenNewEntry={handleOpenGeneralEntry}
+          />
+        )}
+
+        {activeView === 'table' && (
           <DataTable
             rows={rows}
             headers={headers}
@@ -513,7 +577,9 @@ export default function App() {
             onDeleteRow={handleRequestDeleteRow}
             onQuickSaveRow={handleQuickSaveInline}
           />
-        ) : (
+        )}
+
+        {activeView === 'analytics' && (
           <AnalyticsView
             rows={rows}
             headers={headers}
@@ -537,7 +603,11 @@ export default function App() {
         isOpen={isEntryModalOpen}
         headers={headers}
         existingRows={rows}
-        onClose={() => setIsEntryModalOpen(false)}
+        initialIsoDate={selectedDateForEntry}
+        onClose={() => {
+          setIsEntryModalOpen(false);
+          setSelectedDateForEntry(undefined);
+        }}
         onSubmit={handleRequestNewEntry}
       />
 

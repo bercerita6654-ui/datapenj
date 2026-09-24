@@ -6,7 +6,7 @@ export interface MonthOption {
   count: number;
 }
 
-const INDO_MONTHS = [
+export const INDO_MONTHS = [
   'Januari',
   'Februari',
   'Maret',
@@ -21,9 +21,11 @@ const INDO_MONTHS = [
   'Desember',
 ];
 
+export const INDO_MONTH_NAMES = INDO_MONTHS;
+
 const INDO_MONTHS_LOWER = INDO_MONTHS.map((m) => m.toLowerCase());
 
-const MONTH_ALIASES: Record<string, number> = {
+export const MONTH_ALIASES: Record<string, number> = {
   jan: 0,
   januari: 0,
   january: 0,
@@ -62,6 +64,80 @@ const MONTH_ALIASES: Record<string, number> = {
   dec: 11,
   december: 11,
 };
+
+export function getTodayISO(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function formatDateID(isoOrDateStr: string): string {
+  if (!isoOrDateStr) return '';
+  const match = isoOrDateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const year = parseInt(match[1], 10);
+    const monthIndex = parseInt(match[2], 10) - 1;
+    const day = parseInt(match[3], 10);
+    const monthName = INDO_MONTHS[monthIndex] || '';
+    return `${day} ${monthName} ${year}`;
+  }
+  return isoOrDateStr;
+}
+
+export function parseIndonesianDateToISO(text: string): string | null {
+  if (!text) return null;
+  const trimmed = text.trim();
+
+  // 1. ISO YYYY-MM-DD
+  const isoMatch = trimmed.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (isoMatch) {
+    const y = isoMatch[1];
+    const m = String(parseInt(isoMatch[2], 10)).padStart(2, '0');
+    const d = String(parseInt(isoMatch[3], 10)).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // 2. DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (dmyMatch) {
+    const d = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
+    const m = String(parseInt(dmyMatch[2], 10)).padStart(2, '0');
+    const y = dmyMatch[3];
+    return `${y}-${m}-${d}`;
+  }
+
+  // 3. Textual Indonesian date like "24 September 2026" or "Senin, 24 September 2026"
+  const words = trimmed.toLowerCase().split(/[\s,./-]+/);
+  let foundDay: number | null = null;
+  let foundMonth: number | null = null;
+  let foundYear: number | null = null;
+
+  for (const word of words) {
+    if (MONTH_ALIASES[word] !== undefined && foundMonth === null) {
+      foundMonth = MONTH_ALIASES[word];
+      continue;
+    }
+    const num = parseInt(word, 10);
+    if (!isNaN(num)) {
+      if (num >= 1900 && num <= 2100 && foundYear === null) {
+        foundYear = num;
+      } else if (num >= 1 && num <= 31 && foundDay === null) {
+        foundDay = num;
+      }
+    }
+  }
+
+  if (foundMonth !== null) {
+    const y = foundYear || new Date().getFullYear();
+    const m = String(foundMonth + 1).padStart(2, '0');
+    const d = String(foundDay || 1).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  return null;
+}
 
 /**
  * Extract Month and Year from a date string

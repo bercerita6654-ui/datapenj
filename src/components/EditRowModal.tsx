@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Edit3, X, Save, Calendar, CheckSquare, Sparkles, Zap, Package, PenTool, Calculator } from 'lucide-react';
 import { SheetHeaderConfig, SheetRow } from '../types/sheets';
 import { formatNumberInput, parseNumericValue, formatIndonesianCurrency } from '../services/sheets';
-import { detectTransactionCategory, TRANSACTION_THEMES } from '../utils/transactionColors';
+import { detectTransactionCategory, detectColumnValueType, TRANSACTION_THEMES } from '../utils/transactionColors';
 
 interface EditRowModalProps {
   isOpen: boolean;
@@ -52,35 +52,55 @@ export const EditRowModal: React.FC<EditRowModalProps> = ({
     }
   }, [row, isOpen]);
 
-  // Calculations for TOTAL TRANSAKSI & TOTAL NOMINAL
+  // Calculations for TOTAL TRANSAKSI (Qty) & TOTAL NOMINAL (Rp)
   const columnData = useMemo(() => {
     const rawCols = [
-      { key: 'col2', val: col2, cat: detectTransactionCategory(headers.col2Name, 2) },
-      { key: 'col3', val: col3, cat: detectTransactionCategory(headers.col3Name, 3) },
-      { key: 'col4', val: col4, cat: detectTransactionCategory(headers.col4Name, 4) },
-      { key: 'col5', val: col5, cat: detectTransactionCategory(headers.col5Name, 5) },
-      { key: 'col6', val: col6, cat: detectTransactionCategory(headers.col6Name, 6) },
-      { key: 'col7', val: col7, cat: detectTransactionCategory(headers.col7Name, 7) },
+      { key: 'col2', val: col2, colIndex: 2, cat: detectTransactionCategory(headers.col2Name, 2), type: detectColumnValueType(headers.col2Name, 2) },
+      { key: 'col3', val: col3, colIndex: 3, cat: detectTransactionCategory(headers.col3Name, 3), type: detectColumnValueType(headers.col3Name, 3) },
+      { key: 'col4', val: col4, colIndex: 4, cat: detectTransactionCategory(headers.col4Name, 4), type: detectColumnValueType(headers.col4Name, 4) },
+      { key: 'col5', val: col5, colIndex: 5, cat: detectTransactionCategory(headers.col5Name, 5), type: detectColumnValueType(headers.col5Name, 5) },
+      { key: 'col6', val: col6, colIndex: 6, cat: detectTransactionCategory(headers.col6Name, 6), type: detectColumnValueType(headers.col6Name, 6) },
+      { key: 'col7', val: col7, colIndex: 7, cat: detectTransactionCategory(headers.col7Name, 7), type: detectColumnValueType(headers.col7Name, 7) },
     ];
 
-    let totalNominal = 0;
-    let totalTransaksi = 0;
     let instanNominal = 0;
     let regulerNominal = 0;
     let manualNominal = 0;
+    let instanTrx = 0;
+    let regulerTrx = 0;
+    let manualTrx = 0;
 
     rawCols.forEach((col) => {
       const num = parseNumericValue(col.val);
-      if (num !== 0 || col.val.trim() !== '') {
-        totalTransaksi += 1;
+
+      if (col.type === 'nominal') {
+        // Only Nominal columns in Rp
+        if (col.cat === 'instan') instanNominal += num;
+        else if (col.cat === 'reguler') regulerNominal += num;
+        else if (col.cat === 'manual') manualNominal += num;
+      } else {
+        // Qty columns in Jumlah Transaksi
+        if (col.cat === 'instan') instanTrx += num;
+        else if (col.cat === 'reguler') regulerTrx += num;
+        else if (col.cat === 'manual') manualTrx += num;
       }
-      totalNominal += num;
-      if (col.cat === 'instan') instanNominal += num;
-      if (col.cat === 'reguler') regulerNominal += num;
-      if (col.cat === 'manual') manualNominal += num;
     });
 
-    return { totalNominal, totalTransaksi, instanNominal, regulerNominal, manualNominal };
+    // TOTAL NOMINAL = TOTAL INSTAN + TOTAL REGULER + TOTAL MANUAL (Hanya nominal Rp)
+    const totalNominal = instanNominal + regulerNominal + manualNominal;
+    // TOTAL TRANSAKSI = TRANSAKSI INSTAN + TRANSAKSI REGULER + TRANSAKSI MANUAL (Hanya Qty Transaksi)
+    const totalTransaksi = instanTrx + regulerTrx + manualTrx;
+
+    return {
+      totalNominal,
+      totalTransaksi,
+      instanNominal,
+      regulerNominal,
+      manualNominal,
+      instanTrx,
+      regulerTrx,
+      manualTrx,
+    };
   }, [col2, col3, col4, col5, col6, col7, headers]);
 
   if (!isOpen || !row) return null;
@@ -111,12 +131,12 @@ export const EditRowModal: React.FC<EditRowModalProps> = ({
     (allowDateEdit && dateRef !== row.dateRef);
 
   const columnFields = [
-    { num: 2, name: headers.col2Name, val: col2, setVal: setCol2, orig: row.col2, category: detectTransactionCategory(headers.col2Name, 2) },
-    { num: 3, name: headers.col3Name, val: col3, setVal: setCol3, orig: row.col3, category: detectTransactionCategory(headers.col3Name, 3) },
-    { num: 4, name: headers.col4Name, val: col4, setVal: setCol4, orig: row.col4, category: detectTransactionCategory(headers.col4Name, 4) },
-    { num: 5, name: headers.col5Name, val: col5, setVal: setCol5, orig: row.col5, category: detectTransactionCategory(headers.col5Name, 5) },
-    { num: 6, name: headers.col6Name, val: col6, setVal: setCol6, orig: row.col6, category: detectTransactionCategory(headers.col6Name, 6) },
-    { num: 7, name: headers.col7Name, val: col7, setVal: setCol7, orig: row.col7, category: detectTransactionCategory(headers.col7Name, 7) },
+    { num: 2, name: headers.col2Name, val: col2, setVal: setCol2, orig: row.col2, category: detectTransactionCategory(headers.col2Name, 2), valueType: detectColumnValueType(headers.col2Name, 2) },
+    { num: 3, name: headers.col3Name, val: col3, setVal: setCol3, orig: row.col3, category: detectTransactionCategory(headers.col3Name, 3), valueType: detectColumnValueType(headers.col3Name, 3) },
+    { num: 4, name: headers.col4Name, val: col4, setVal: setCol4, orig: row.col4, category: detectTransactionCategory(headers.col4Name, 4), valueType: detectColumnValueType(headers.col4Name, 4) },
+    { num: 5, name: headers.col5Name, val: col5, setVal: setCol5, orig: row.col5, category: detectTransactionCategory(headers.col5Name, 5), valueType: detectColumnValueType(headers.col5Name, 5) },
+    { num: 6, name: headers.col6Name, val: col6, setVal: setCol6, orig: row.col6, category: detectTransactionCategory(headers.col6Name, 6), valueType: detectColumnValueType(headers.col6Name, 6) },
+    { num: 7, name: headers.col7Name, val: col7, setVal: setCol7, orig: row.col7, category: detectTransactionCategory(headers.col7Name, 7), valueType: detectColumnValueType(headers.col7Name, 7) },
   ];
 
   return (
@@ -150,12 +170,12 @@ export const EditRowModal: React.FC<EditRowModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Kolom 1 (Date Reference) */}
+          {/* Kolom 1 (Date / Ref) View / Toggle Edit */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-emerald-600" />
-                Kolom 1: {headers.col1Name} (Acuan)
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-slate-500" />
+                Kolom 1: {headers.col1Name || 'Acuan Hari / Tanggal'}
               </label>
               <button
                 type="button"
@@ -179,33 +199,49 @@ export const EditRowModal: React.FC<EditRowModalProps> = ({
             />
           </div>
 
-          {/* TOTAL TRANSAKSI & TOTAL NOMINAL BANNER */}
+          {/* TOTAL TRANSAKSI (Qty) & TOTAL NOMINAL (Rp) BANNER */}
           <div className="p-4 rounded-xl bg-slate-900 text-white shadow-md space-y-3">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-              {/* TOTAL NOMINAL */}
+              {/* TOTAL NOMINAL = TOTAL INSTAN + TOTAL REGULER + TOTAL MANUAL (Hanya Nominal Rp) */}
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
                   <Calculator className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    TOTAL NOMINAL
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <span>TOTAL NOMINAL (Rp)</span>
+                    <span className="text-[9px] text-emerald-400 font-semibold hidden sm:inline">(TOTAL INSTAN + TOTAL REGULER + TOTAL MANUAL)</span>
                   </div>
                   <div className="text-xl sm:text-2xl font-extrabold font-mono text-emerald-400">
                     {formatIndonesianCurrency(columnData.totalNominal)}
                   </div>
+                  <div className="text-[10px] text-slate-400 font-mono flex flex-wrap items-center gap-1 mt-0.5">
+                    <span className="text-amber-300 font-semibold">{formatIndonesianCurrency(columnData.instanNominal)}</span>
+                    <span className="text-slate-500">+</span>
+                    <span className="text-sky-300 font-semibold">{formatIndonesianCurrency(columnData.regulerNominal)}</span>
+                    <span className="text-slate-500">+</span>
+                    <span className="text-purple-300 font-semibold">{formatIndonesianCurrency(columnData.manualNominal)}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* TOTAL TRANSAKSI */}
+              {/* TOTAL TRANSAKSI = TRANSAKSI INSTAN + TRANSAKSI REGULER + TRANSAKSI MANUAL (Hanya Qty) */}
               <div className="flex items-center justify-between sm:justify-end gap-6 border-t sm:border-t-0 sm:border-l border-slate-800 pt-3 sm:pt-0 sm:pl-6">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    TOTAL TRANSAKSI
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <span>TOTAL TRANSAKSI (Qty)</span>
+                    <span className="text-[9px] text-indigo-300 font-semibold hidden sm:inline">({columnData.instanTrx} + {columnData.regulerTrx} + {columnData.manualTrx})</span>
                   </div>
                   <div className="text-lg sm:text-xl font-bold font-mono text-white flex items-center gap-1.5">
                     <span>{columnData.totalTransaksi}</span>
-                    <span className="text-xs font-normal text-slate-400">kolom terisi</span>
+                    <span className="text-xs font-normal text-slate-400">Transaksi</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                    <span className="text-amber-300 font-semibold">{columnData.instanTrx}</span>
+                    <span className="text-slate-500">+</span>
+                    <span className="text-sky-300 font-semibold">{columnData.regulerTrx}</span>
+                    <span className="text-slate-500">+</span>
+                    <span className="text-purple-300 font-semibold">{columnData.manualTrx}</span>
                   </div>
                 </div>
 
@@ -216,29 +252,62 @@ export const EditRowModal: React.FC<EditRowModalProps> = ({
             </div>
 
             {/* Category Breakdown Badges */}
-            <div className="pt-2 border-t border-slate-800 grid grid-cols-3 gap-2 text-[11px]">
-              <div className="bg-amber-950/40 border border-amber-800/40 rounded-lg p-2 text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-0.5">
-                <span className="flex items-center gap-1 font-medium">
-                  <Zap className="w-3 h-3 text-amber-400" />
-                  Instan:
-                </span>
-                <span className="font-mono font-bold">{formatIndonesianCurrency(columnData.instanNominal)}</span>
+            <div className="pt-2 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+              {/* INSTAN */}
+              <div className="bg-amber-950/40 border border-amber-800/40 rounded-lg p-2.5 text-amber-300 flex items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1 font-bold text-amber-400">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>⚡ INSTAN</span>
+                  </div>
+                  <div className="text-[10px] text-amber-300/80 mt-0.5 font-medium">
+                    Transaksi: <strong className="text-amber-200 font-mono">{columnData.instanTrx} Qty</strong>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[9px] text-amber-400/70 font-semibold">TOTAL INSTAN</div>
+                  <div className="font-mono font-extrabold text-xs sm:text-sm text-amber-200">
+                    {formatIndonesianCurrency(columnData.instanNominal)}
+                  </div>
+                </div>
               </div>
 
-              <div className="bg-sky-950/40 border border-sky-800/40 rounded-lg p-2 text-sky-300 flex flex-col sm:flex-row sm:items-center justify-between gap-0.5">
-                <span className="flex items-center gap-1 font-medium">
-                  <Package className="w-3 h-3 text-sky-400" />
-                  Reguler:
-                </span>
-                <span className="font-mono font-bold">{formatIndonesianCurrency(columnData.regulerNominal)}</span>
+              {/* REGULER */}
+              <div className="bg-sky-950/40 border border-sky-800/40 rounded-lg p-2.5 text-sky-300 flex items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1 font-bold text-sky-400">
+                    <Package className="w-3.5 h-3.5" />
+                    <span>📦 REGULER</span>
+                  </div>
+                  <div className="text-[10px] text-sky-300/80 mt-0.5 font-medium">
+                    Transaksi: <strong className="text-sky-200 font-mono">{columnData.regulerTrx} Qty</strong>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[9px] text-sky-400/70 font-semibold">TOTAL REGULER</div>
+                  <div className="font-mono font-extrabold text-xs sm:text-sm text-sky-200">
+                    {formatIndonesianCurrency(columnData.regulerNominal)}
+                  </div>
+                </div>
               </div>
 
-              <div className="bg-purple-950/40 border border-purple-800/40 rounded-lg p-2 text-purple-300 flex flex-col sm:flex-row sm:items-center justify-between gap-0.5">
-                <span className="flex items-center gap-1 font-medium">
-                  <PenTool className="w-3 h-3 text-purple-400" />
-                  Manual:
-                </span>
-                <span className="font-mono font-bold">{formatIndonesianCurrency(columnData.manualNominal)}</span>
+              {/* MANUAL */}
+              <div className="bg-purple-950/40 border border-purple-800/40 rounded-lg p-2.5 text-purple-300 flex items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1 font-bold text-purple-400">
+                    <PenTool className="w-3.5 h-3.5" />
+                    <span>✍️ MANUAL</span>
+                  </div>
+                  <div className="text-[10px] text-purple-300/80 mt-0.5 font-medium">
+                    Transaksi: <strong className="text-purple-200 font-mono">{columnData.manualTrx} Qty</strong>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[9px] text-purple-400/70 font-semibold">TOTAL MANUAL</div>
+                  <div className="font-mono font-extrabold text-xs sm:text-sm text-purple-200">
+                    {formatIndonesianCurrency(columnData.manualNominal)}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -263,6 +332,7 @@ export const EditRowModal: React.FC<EditRowModalProps> = ({
                 const isInstan = field.category === 'instan';
                 const isReguler = field.category === 'reguler';
                 const isManual = field.category === 'manual';
+                const isQty = field.valueType === 'qty';
                 const isChanged = field.val !== (field.orig || '');
 
                 return (
@@ -279,39 +349,63 @@ export const EditRowModal: React.FC<EditRowModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-bold flex items-center gap-1.5 truncate max-w-[190px]">
+                      <label className="text-xs font-bold flex items-center gap-1.5 truncate max-w-[200px]">
                         {isInstan && <Zap className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
                         {isReguler && <Package className="w-3.5 h-3.5 text-sky-600 shrink-0" />}
                         {isManual && <PenTool className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
                         <span className={theme.badgeText}>{field.name}</span>
                       </label>
 
-                      <span
-                        className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold uppercase border ${theme.badgeBg} ${theme.badgeText} ${theme.badgeBorder}`}
-                      >
-                        {isInstan
-                          ? '⚡ Instan'
-                          : isReguler
-                          ? '📦 Reguler'
-                          : isManual
-                          ? '✍️ Manual'
-                          : `Col ${String.fromCharCode(64 + field.num)}`}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold uppercase border ${theme.badgeBg} ${theme.badgeText} ${theme.badgeBorder}`}
+                        >
+                          {isInstan
+                            ? '⚡ Instan'
+                            : isReguler
+                            ? '📦 Reguler'
+                            : isManual
+                            ? '✍️ Manual'
+                            : `Col ${String.fromCharCode(64 + field.num)}`}
+                        </span>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                            isQty
+                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          {isQty ? 'Jumlah Qty' : 'Nominal Rp'}
+                        </span>
+                      </div>
                     </div>
 
-                    <input
-                      type="text"
-                      value={field.val}
-                      onChange={(e) => field.setVal(formatNumberInput(e.target.value))}
-                      placeholder={`Isi nilai ${field.name} (contoh: 390.000)...`}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500 font-mono shadow-xs"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={field.val}
+                        onChange={(e) => field.setVal(formatNumberInput(e.target.value))}
+                        placeholder={isQty ? `Isi jumlah transaksi ${field.name}...` : `Isi total nominal ${field.name}...`}
+                        className={`w-full bg-white border rounded-lg px-3 py-2 text-sm text-slate-900 font-mono shadow-xs focus:outline-none ${
+                          isChanged
+                            ? 'border-amber-400 ring-1 ring-amber-400'
+                            : 'border-slate-300 focus:border-indigo-500'
+                        }`}
+                      />
+                    </div>
 
-                    {isChanged && (
-                      <div className="text-[11px] text-amber-700 mt-1 truncate">
-                        Sebelumnya: <span className="line-through text-slate-400">{field.orig || '(kosong)'}</span>
-                      </div>
-                    )}
+                    <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500 px-1 font-mono">
+                      <span>Nilai saat ini:</span>
+                      <span className="font-semibold text-slate-800">
+                        {field.val
+                          ? isQty
+                            ? `${parseNumericValue(field.val)} transaksi (Qty)`
+                            : formatIndonesianCurrency(parseNumericValue(field.val))
+                          : isQty
+                          ? '0 transaksi'
+                          : 'Rp 0'}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
@@ -319,22 +413,31 @@ export const EditRowModal: React.FC<EditRowModalProps> = ({
           </div>
 
           {/* Action Footer */}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={!hasChanges}
-              className="px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-sm flex items-center gap-2 transition"
-            >
-              <Save className="w-4 h-4" />
-              Simpan Perubahan
-            </button>
+          <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
+            <div>
+              {hasChanges && (
+                <span className="text-xs text-amber-700 flex items-center gap-1 font-medium">
+                  Perubahan siap disimpan
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm flex items-center gap-2 transition"
+              >
+                <Save className="w-4 h-4" />
+                Simpan Perubahan
+              </button>
+            </div>
           </div>
         </form>
       </div>

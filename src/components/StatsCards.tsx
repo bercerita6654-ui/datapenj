@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { SheetHeaderConfig, SheetRow } from '../types/sheets';
 import { parseNumericValue, formatIndonesianCurrency, formatNumberLocale } from '../services/sheets';
-import { detectTransactionCategory } from '../utils/transactionColors';
+import { detectTransactionCategory, detectColumnValueType } from '../utils/transactionColors';
 import { filterRowsByMonth, MonthOption } from '../utils/monthHelper';
 
 interface StatsCardsProps {
@@ -58,36 +58,54 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
   );
 
   // Group totals by Transaction Category (Instan, Reguler, Manual) for the ACTIVE MONTH
+  // Strictly separating Nominal (Rp) and Qty (Transaksi)
   const stats = useMemo(() => {
-    let instanTotal = 0;
-    let regulerTotal = 0;
-    let manualTotal = 0;
-    let filledEntriesCount = 0;
+    let instanNominal = 0;
+    let regulerNominal = 0;
+    let manualNominal = 0;
+    let instanTrx = 0;
+    let regulerTrx = 0;
+    let manualTrx = 0;
 
     const colCategories = [
-      { key: 'col2' as const, cat: detectTransactionCategory(headers.col2Name, 2) },
-      { key: 'col3' as const, cat: detectTransactionCategory(headers.col3Name, 3) },
-      { key: 'col4' as const, cat: detectTransactionCategory(headers.col4Name, 4) },
-      { key: 'col5' as const, cat: detectTransactionCategory(headers.col5Name, 5) },
-      { key: 'col6' as const, cat: detectTransactionCategory(headers.col6Name, 6) },
-      { key: 'col7' as const, cat: detectTransactionCategory(headers.col7Name, 7) },
+      { key: 'col2' as const, cat: detectTransactionCategory(headers.col2Name, 2), type: detectColumnValueType(headers.col2Name, 2) },
+      { key: 'col3' as const, cat: detectTransactionCategory(headers.col3Name, 3), type: detectColumnValueType(headers.col3Name, 3) },
+      { key: 'col4' as const, cat: detectTransactionCategory(headers.col4Name, 4), type: detectColumnValueType(headers.col4Name, 4) },
+      { key: 'col5' as const, cat: detectTransactionCategory(headers.col5Name, 5), type: detectColumnValueType(headers.col5Name, 5) },
+      { key: 'col6' as const, cat: detectTransactionCategory(headers.col6Name, 6), type: detectColumnValueType(headers.col6Name, 6) },
+      { key: 'col7' as const, cat: detectTransactionCategory(headers.col7Name, 7), type: detectColumnValueType(headers.col7Name, 7) },
     ];
 
     activeMonthRows.forEach((row) => {
-      colCategories.forEach(({ key, cat }) => {
+      colCategories.forEach(({ key, cat, type }) => {
         const val = parseNumericValue(row[key]);
-        if (val > 0 || (row[key] && row[key].trim() !== '')) {
-          filledEntriesCount += 1;
+
+        if (type === 'nominal') {
+          if (cat === 'instan') instanNominal += val;
+          else if (cat === 'reguler') regulerNominal += val;
+          else if (cat === 'manual') manualNominal += val;
+        } else {
+          // Qty (Jumlah Transaksi)
+          if (cat === 'instan') instanTrx += val;
+          else if (cat === 'reguler') regulerTrx += val;
+          else if (cat === 'manual') manualTrx += val;
         }
-        if (cat === 'instan') instanTotal += val;
-        else if (cat === 'reguler') regulerTotal += val;
-        else if (cat === 'manual') manualTotal += val;
       });
     });
 
-    const grandTotalNominal = instanTotal + regulerTotal + manualTotal;
+    const grandTotalNominal = instanNominal + regulerNominal + manualNominal;
+    const grandTotalTransaksi = instanTrx + regulerTrx + manualTrx;
 
-    return { instanTotal, regulerTotal, manualTotal, grandTotalNominal, filledEntriesCount };
+    return {
+      instanNominal,
+      regulerNominal,
+      manualNominal,
+      instanTrx,
+      regulerTrx,
+      manualTrx,
+      grandTotalNominal,
+      grandTotalTransaksi,
+    };
   }, [activeMonthRows, headers]);
 
   return (
@@ -151,17 +169,31 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             <div className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-400 mt-0.5">
               {formatIndonesianCurrency(stats.grandTotalNominal)}
             </div>
+            <div className="text-[10px] text-slate-400 font-mono flex flex-wrap items-center gap-1 mt-0.5">
+              <span className="text-amber-300 font-semibold">{formatIndonesianCurrency(stats.instanNominal)}</span>
+              <span className="text-slate-500">+</span>
+              <span className="text-sky-300 font-semibold">{formatIndonesianCurrency(stats.regulerNominal)}</span>
+              <span className="text-slate-500">+</span>
+              <span className="text-purple-300 font-semibold">{formatIndonesianCurrency(stats.manualNominal)}</span>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-6 border-t md:border-t-0 md:border-l border-slate-800 pt-3 md:pt-0 md:pl-6 justify-between md:justify-end">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              TOTAL TRANSAKSI
+              TOTAL TRANSAKSI (QTY)
             </div>
             <div className="text-lg sm:text-xl font-bold font-mono text-white">
-              {stats.filledEntriesCount}{' '}
-              <span className="text-xs font-normal text-slate-400">entri terisi</span>
+              {stats.grandTotalTransaksi}{' '}
+              <span className="text-xs font-normal text-slate-400">Transaksi</span>
+            </div>
+            <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+              <span className="text-amber-300 font-semibold">{stats.instanTrx}</span>
+              <span className="text-slate-500">+</span>
+              <span className="text-sky-300 font-semibold">{stats.regulerTrx}</span>
+              <span className="text-slate-500">+</span>
+              <span className="text-purple-300 font-semibold">{stats.manualTrx}</span>
             </div>
           </div>
 
@@ -179,12 +211,12 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
 
       {/* Category Breakout Cards (Instan, Reguler, Manual) for Active Month */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Card 1: TRANSAKSI INSTAN (Kuning/Amber) */}
+        {/* Card 1: INSTAN (Kuning/Amber) */}
         <div className="bg-white border-2 border-amber-300/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-shadow relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
               <Zap className="w-4 h-4 text-amber-600" />
-              TRANSAKSI INSTAN
+              TOTAL INSTAN
             </span>
             <div className="p-2 rounded-xl bg-amber-100 text-amber-700 border border-amber-200">
               <Zap className="w-4 h-4" />
@@ -192,25 +224,21 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
           </div>
           <div className="mt-3">
             <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 truncate block">
-              {stats.instanTotal > 0
-                ? formatIndonesianCurrency(stats.instanTotal)
-                : 'Rp 0'}
+              {formatIndonesianCurrency(stats.instanNominal)}
             </span>
           </div>
-          <div className="mt-2 text-xs text-amber-700 flex items-center justify-between font-medium">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
-              <span>Total bulan {activeMonthLabel}</span>
-            </span>
+          <div className="mt-2 text-xs text-amber-800 flex items-center justify-between font-medium">
+            <span className="font-semibold">{stats.instanTrx} Transaksi Instan (Qty)</span>
+            <span className="text-slate-400">{activeMonthLabel}</span>
           </div>
         </div>
 
-        {/* Card 2: TRANSAKSI REGULER (Biru/Sky) */}
+        {/* Card 2: REGULER (Biru/Sky) */}
         <div className="bg-white border-2 border-sky-300/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-shadow relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-sky-800 uppercase tracking-wider flex items-center gap-1.5">
               <Package className="w-4 h-4 text-sky-600" />
-              TRANSAKSI REGULER
+              TOTAL REGULER
             </span>
             <div className="p-2 rounded-xl bg-sky-100 text-sky-700 border border-sky-200">
               <Package className="w-4 h-4" />
@@ -218,25 +246,21 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
           </div>
           <div className="mt-3">
             <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 truncate block">
-              {stats.regulerTotal > 0
-                ? formatIndonesianCurrency(stats.regulerTotal)
-                : 'Rp 0'}
+              {formatIndonesianCurrency(stats.regulerNominal)}
             </span>
           </div>
-          <div className="mt-2 text-xs text-sky-700 flex items-center justify-between font-medium">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-sky-500 inline-block"></span>
-              <span>Total bulan {activeMonthLabel}</span>
-            </span>
+          <div className="mt-2 text-xs text-sky-800 flex items-center justify-between font-medium">
+            <span className="font-semibold">{stats.regulerTrx} Transaksi Reguler (Qty)</span>
+            <span className="text-slate-400">{activeMonthLabel}</span>
           </div>
         </div>
 
-        {/* Card 3: TRANSAKSI MANUAL (Ungu/Purple) */}
+        {/* Card 3: MANUAL (Ungu/Purple) */}
         <div className="bg-white border-2 border-purple-300/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-shadow relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-purple-800 uppercase tracking-wider flex items-center gap-1.5">
               <PenTool className="w-4 h-4 text-purple-600" />
-              TRANSAKSI MANUAL
+              TOTAL MANUAL
             </span>
             <div className="p-2 rounded-xl bg-purple-100 text-purple-700 border border-purple-200">
               <PenTool className="w-4 h-4" />
@@ -244,16 +268,12 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
           </div>
           <div className="mt-3">
             <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 truncate block">
-              {stats.manualTotal > 0
-                ? formatIndonesianCurrency(stats.manualTotal)
-                : 'Rp 0'}
+              {formatIndonesianCurrency(stats.manualNominal)}
             </span>
           </div>
-          <div className="mt-2 text-xs text-purple-700 flex items-center justify-between font-medium">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-purple-500 inline-block"></span>
-              <span>Total bulan {activeMonthLabel}</span>
-            </span>
+          <div className="mt-2 text-xs text-purple-800 flex items-center justify-between font-medium">
+            <span className="font-semibold">{stats.manualTrx} Transaksi Manual (Qty)</span>
+            <span className="text-slate-400">{activeMonthLabel}</span>
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
   LogOut,
   BarChart2,
   Table as TableIcon,
+  Calendar as CalendarIcon,
   ChevronDown,
 } from 'lucide-react';
 
@@ -18,8 +19,8 @@ interface NavbarProps {
   currentSheetName: string;
   availableSheets: string[];
   isLoading: boolean;
-  activeView: 'table' | 'analytics';
-  onViewChange: (view: 'table' | 'analytics') => void;
+  activeView: 'calendar' | 'table' | 'analytics';
+  onViewChange: (view: 'calendar' | 'table' | 'analytics') => void;
   onRefresh: () => void;
   onSelectSheet: (name: string) => void;
   onOpenNewEntry: () => void;
@@ -96,8 +97,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Center Tabs: Table vs Analytics */}
+          {/* Center Tabs: Calendar vs Table vs Analytics */}
           <div className="hidden md:flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={() => onViewChange('calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeView === 'calendar'
+                  ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <CalendarIcon className="w-3.5 h-3.5" />
+              <span>Kalender</span>
+            </button>
             <button
               onClick={() => onViewChange('table')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
@@ -138,63 +150,83 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onRefresh}
               disabled={isLoading}
-              title="Sinkronkan data dari Google Sheet"
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition disabled:opacity-50"
+              title="Refresh Data dari Google Sheets"
+              className="p-2 text-slate-500 hover:text-emerald-700 rounded-xl bg-slate-100 hover:bg-emerald-50 border border-slate-200 transition disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-emerald-600' : ''}`} />
             </button>
 
-            {/* User Profile / Logout */}
-            {user && (
-              <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-                {user.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt={user.displayName || 'User'}
-                    className="w-8 h-8 rounded-full border border-slate-200 object-cover"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center justify-center font-bold text-xs">
-                    {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
-                  </div>
-                )}
+            {/* User Profile & Logout */}
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'User'}
+                  className="w-8 h-8 rounded-full border border-emerald-300"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs">
+                  {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+                </div>
+              )}
 
-                <button
-                  onClick={onLogout}
-                  title="Keluar dari akun Google"
-                  className="p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
+              <div className="hidden lg:block text-left text-xs">
+                <div className="font-semibold text-slate-800 truncate max-w-[120px]">
+                  {user?.displayName || 'Pengguna'}
+                </div>
+                <div className="text-[10px] text-slate-400 truncate max-w-[120px]">
+                  {user?.email}
+                </div>
               </div>
-            )}
+
+              <button
+                onClick={onLogout}
+                title="Keluar"
+                className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Mobile View Toggle */}
-        <div className="md:hidden flex items-center justify-center gap-2 pb-3 pt-1 border-t border-slate-100">
-          <button
-            onClick={() => onViewChange('table')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold ${
-              activeView === 'table'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            <TableIcon className="w-3.5 h-3.5" />
-            <span>Tabel Data</span>
-          </button>
-          <button
-            onClick={() => onViewChange('analytics')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold ${
-              activeView === 'analytics'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            <BarChart2 className="w-3.5 h-3.5" />
-            <span>Grafik Tren</span>
-          </button>
+        {/* Mobile View Switcher */}
+        <div className="md:hidden flex items-center justify-center pb-3 pt-1 border-t border-slate-100">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 w-full">
+            <button
+              onClick={() => onViewChange('calendar')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeView === 'calendar'
+                  ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                  : 'text-slate-600'
+              }`}
+            >
+              <CalendarIcon className="w-3.5 h-3.5" />
+              <span>Kalender</span>
+            </button>
+            <button
+              onClick={() => onViewChange('table')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeView === 'table'
+                  ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                  : 'text-slate-600'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>Tabel</span>
+            </button>
+            <button
+              onClick={() => onViewChange('analytics')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeView === 'analytics'
+                  ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                  : 'text-slate-600'
+              }`}
+            >
+              <BarChart2 className="w-3.5 h-3.5" />
+              <span>Grafik</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>

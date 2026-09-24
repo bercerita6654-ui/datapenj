@@ -1,4 +1,5 @@
 export type TransactionType = 'instan' | 'reguler' | 'manual' | 'neutral';
+export type ColumnValueType = 'qty' | 'nominal';
 
 export interface CategoryTheme {
   type: TransactionType;
@@ -17,7 +18,7 @@ export interface CategoryTheme {
 export const TRANSACTION_THEMES: Record<TransactionType, CategoryTheme> = {
   instan: {
     type: 'instan',
-    label: 'TRANSAKSI INSTAN',
+    label: 'INSTAN',
     badgeBg: 'bg-amber-50',
     badgeText: 'text-amber-800',
     badgeBorder: 'border-amber-300',
@@ -30,7 +31,7 @@ export const TRANSACTION_THEMES: Record<TransactionType, CategoryTheme> = {
   },
   reguler: {
     type: 'reguler',
-    label: 'TRANSAKSI REGULER',
+    label: 'REGULER',
     badgeBg: 'bg-sky-50',
     badgeText: 'text-sky-800',
     badgeBorder: 'border-sky-300',
@@ -43,7 +44,7 @@ export const TRANSACTION_THEMES: Record<TransactionType, CategoryTheme> = {
   },
   manual: {
     type: 'manual',
-    label: 'TRANSAKSI MANUAL',
+    label: 'MANUAL',
     badgeBg: 'bg-purple-50',
     badgeText: 'text-purple-800',
     badgeBorder: 'border-purple-300',
@@ -120,4 +121,61 @@ export function detectTransactionCategory(text: string, colIndex?: number): Tran
   }
 
   return 'neutral';
+}
+
+/**
+ * Detect whether a column represents QTY / Count (Jumlah Transaksi) or NOMINAL (Rupiah Amount)
+ */
+export function detectColumnValueType(text: string, colIndex?: number): ColumnValueType {
+  if (!text) {
+    if (colIndex === 2 || colIndex === 4 || colIndex === 6) return 'qty';
+    if (colIndex === 3 || colIndex === 5 || colIndex === 7) return 'nominal';
+    return 'nominal';
+  }
+
+  const normalized = text.toLowerCase();
+
+  // If header contains 'transaksi', 'trx', 'qty', 'jumlah', 'order', 'pesanan'
+  // (and does not explicitly state 'total' or 'nominal' or 'omset' or 'rp') -> it is QTY
+  if (
+    normalized.includes('transaksi') ||
+    normalized.includes('trx') ||
+    normalized.includes('qty') ||
+    normalized.includes('jumlah') ||
+    normalized.includes('jml') ||
+    normalized.includes('pesanan') ||
+    normalized.includes('order')
+  ) {
+    if (
+      !normalized.includes('total instan') &&
+      !normalized.includes('total reguler') &&
+      !normalized.includes('total manual') &&
+      !normalized.includes('nominal') &&
+      !normalized.includes('rp') &&
+      !normalized.includes('omset') &&
+      !normalized.includes('pendapatan')
+    ) {
+      return 'qty';
+    }
+  }
+
+  // If header contains 'total', 'nominal', 'rp', 'omset', 'pendapatan', 'nilai' -> NOMINAL
+  if (
+    normalized.includes('total') ||
+    normalized.includes('nominal') ||
+    normalized.includes('rp') ||
+    normalized.includes('omset') ||
+    normalized.includes('pendapatan') ||
+    normalized.includes('nilai')
+  ) {
+    return 'nominal';
+  }
+
+  // Fallback based on typical 6-column layout (2: Qty, 3: Rp, 4: Qty, 5: Rp, 6: Qty, 7: Rp)
+  if (colIndex !== undefined) {
+    if (colIndex === 2 || colIndex === 4 || colIndex === 6) return 'qty';
+    if (colIndex === 3 || colIndex === 5 || colIndex === 7) return 'nominal';
+  }
+
+  return 'nominal';
 }

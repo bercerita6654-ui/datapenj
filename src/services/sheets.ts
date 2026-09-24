@@ -390,19 +390,26 @@ export function parseNumericValue(val: string | number | null | undefined): numb
 
 export function formatIndonesianCurrency(amount: number): string {
   if (isNaN(amount) || amount === 0) return 'Rp 0';
+
+  const rounded = Math.round(amount);
+
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
-    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
     minimumFractionDigits: 0,
-  }).format(amount);
+    maximumFractionDigits: 0,
+  }).format(rounded);
 }
 
 export function formatNumberLocale(amount: number): string {
-  if (isNaN(amount)) return '0';
+  if (isNaN(amount) || amount === 0) return '0';
+
+  const rounded = Math.round(amount);
+
   return new Intl.NumberFormat('id-ID', {
-    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-  }).format(amount);
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(rounded);
 }
 
 /**

@@ -14,6 +14,7 @@ import { SheetHeaderConfig, SheetRow } from '../types/sheets';
 import { parseNumericValue, formatIndonesianCurrency, formatNumberLocale } from '../services/sheets';
 import {
   detectTransactionCategory,
+  detectColumnValueType,
   TRANSACTION_THEMES,
 } from '../utils/transactionColors';
 import { filterRowsByMonth, MonthOption } from '../utils/monthHelper';
@@ -39,12 +40,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
   const colOptions = useMemo(() => {
     return [
-      { key: 'col2' as const, num: 2, label: headers.col2Name, category: detectTransactionCategory(headers.col2Name, 2) },
-      { key: 'col3' as const, num: 3, label: headers.col3Name, category: detectTransactionCategory(headers.col3Name, 3) },
-      { key: 'col4' as const, num: 4, label: headers.col4Name, category: detectTransactionCategory(headers.col4Name, 4) },
-      { key: 'col5' as const, num: 5, label: headers.col5Name, category: detectTransactionCategory(headers.col5Name, 5) },
-      { key: 'col6' as const, num: 6, label: headers.col6Name, category: detectTransactionCategory(headers.col6Name, 6) },
-      { key: 'col7' as const, num: 7, label: headers.col7Name, category: detectTransactionCategory(headers.col7Name, 7) },
+      { key: 'col2' as const, num: 2, label: headers.col2Name, category: detectTransactionCategory(headers.col2Name, 2), type: detectColumnValueType(headers.col2Name, 2) },
+      { key: 'col3' as const, num: 3, label: headers.col3Name, category: detectTransactionCategory(headers.col3Name, 3), type: detectColumnValueType(headers.col3Name, 3) },
+      { key: 'col4' as const, num: 4, label: headers.col4Name, category: detectTransactionCategory(headers.col4Name, 4), type: detectColumnValueType(headers.col4Name, 4) },
+      { key: 'col5' as const, num: 5, label: headers.col5Name, category: detectTransactionCategory(headers.col5Name, 5), type: detectColumnValueType(headers.col5Name, 5) },
+      { key: 'col6' as const, num: 6, label: headers.col6Name, category: detectTransactionCategory(headers.col6Name, 6), type: detectColumnValueType(headers.col6Name, 6) },
+      { key: 'col7' as const, num: 7, label: headers.col7Name, category: detectTransactionCategory(headers.col7Name, 7), type: detectColumnValueType(headers.col7Name, 7) },
     ];
   }, [headers]);
 
@@ -56,18 +57,27 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const activeMonthOption = availableMonths.find((m) => m.key === selectedMonthKey);
   const activeMonthLabel = selectedMonthKey === 'all' ? 'Semua Periode' : (activeMonthOption?.label || 'Bulan Aktif');
 
-  // Aggregate totals by category for active month
+  // Aggregate totals by category for active month (Nominal Rp only for nominal comparison)
   const categorySummary = useMemo(() => {
     let instan = 0;
     let reguler = 0;
     let manual = 0;
+    let instanTrx = 0;
+    let regulerTrx = 0;
+    let manualTrx = 0;
 
     activeMonthRows.forEach((row) => {
       colOptions.forEach((col) => {
         const val = parseNumericValue(row[col.key]);
-        if (col.category === 'instan') instan += val;
-        else if (col.category === 'reguler') reguler += val;
-        else if (col.category === 'manual') manual += val;
+        if (col.type === 'nominal') {
+          if (col.category === 'instan') instan += val;
+          else if (col.category === 'reguler') reguler += val;
+          else if (col.category === 'manual') manual += val;
+        } else {
+          if (col.category === 'instan') instanTrx += val;
+          else if (col.category === 'reguler') regulerTrx += val;
+          else if (col.category === 'manual') manualTrx += val;
+        }
       });
     });
 
@@ -76,7 +86,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     const regulerPct = total > 0 ? Math.round((reguler / total) * 100) : 0;
     const manualPct = total > 0 ? Math.round((manual / total) * 100) : 0;
 
-    return { instan, reguler, manual, total, instanPct, regulerPct, manualPct };
+    return { instan, reguler, manual, instanTrx, regulerTrx, manualTrx, total, instanPct, regulerPct, manualPct };
   }, [activeMonthRows, colOptions]);
 
   // Chart data for currently selected column within active month
@@ -97,7 +107,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const nonZeroData = chartData.filter((d) => d.value > 0);
   const maxValue = Math.max(...chartData.map((d) => d.value), 1);
   const totalValue = chartData.reduce((acc, curr) => acc + curr.value, 0);
-  const avgValue = chartData.length > 0 ? Math.round(totalValue / chartData.length) : 0;
+  const avgValue = chartData.length > 0 ? (totalValue / chartData.length) : 0;
 
   const highestDay = useMemo(() => {
     if (nonZeroData.length === 0) return null;
